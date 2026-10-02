@@ -1,0 +1,9 @@
+# local build outputs
+/src/
+/install/
+/mingw-src/
+/mingw-install/
+/llvm-mingw/
+*.tar.gz
+*.tar.xz
+/opencode.json

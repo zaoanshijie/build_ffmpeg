@@ -1,0 +1,175 @@
+name: build-ffmpeg
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: ffmpeg-build
+  cancel-in-progress: true
+
+jobs:
+  # ---- Linux: gcc/clang x x86_64/aarch64 ----
+  linux:
+    name: linux ${{ matrix.arch }} ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64,  compiler: gcc }
+          - { arch: x86_64,  compiler: clang }
+          - { arch: aarch64, compiler: gcc }
+          - { arch: aarch64, compiler: clang }
+    env:
+      PREFIX: ${{ github.workspace }}/install
+      SRC: ${{ github.workspace }}/src
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git make pkg-config cmake ninja-build meson nasm curl file
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y clang lld
+          fi
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+              binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+          else
+            sudo apt-get install -y libva-dev libvdpau-dev
+          fi
+        shell: bash
+
+      - name: Build FFmpeg and dependencies
+        run: bash scripts/build-linux.sh "${{ matrix.arch }}" "${{ matrix.compiler }}"
+
+      - name: Verify and package
+        run: |
+          set -e
+          mkdir -p "$PREFIX/build-info"
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            file "$PREFIX/bin/ffmpeg" > "$PREFIX/build-info/version.txt" 2>&1 || true
+            ls -lh "$PREFIX/bin"
+          else
+            "$PREFIX/bin/ffmpeg" -hide_banner -version > "$PREFIX/build-info/version.txt" 2>&1 || true
+            "$PREFIX/bin/ffmpeg" -hide_banner -buildconf >> "$PREFIX/build-info/version.txt" 2>&1 || true
+            "$PREFIX/bin/ffmpeg" -hide_banner -encoders > "$PREFIX/build-info/encoders.txt" 2>&1 || true
+            "$PREFIX/bin/ffmpeg" -hide_banner -hwaccels > "$PREFIX/build-info/hwaccels.txt" 2>&1 || true
+          fi
+          cp "$SRC/ffmpeg/config.log" "$PREFIX/build-info/ffmpeg-config.log" 2>/dev/null || true
+          cd "$PREFIX"
+          tar czf "${{ github.workspace }}/ffmpeg-linux-${{ matrix.arch }}-${{ matrix.compiler }}.tar.gz" \
+            bin lib include build-info 2>/dev/null
+          ls -lh "${{ github.workspace }}"/*.tar.gz
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux-${{ matrix.arch }}-${{ matrix.compiler }}
+          path: |
+            ${{ github.workspace }}/ffmpeg-linux-${{ matrix.arch }}-${{ matrix.compiler }}.tar.gz
+            ${{ github.workspace }}/install/build-info
+
+  # ---- Windows x86_64 via llvm-mingw cross from Linux ----
+  windows-mingw:
+    name: windows x86_64 llvm-mingw
+    runs-on: ubuntu-24.04
+    env:
+      PREFIX: ${{ github.workspace }}/mingw-install
+      SRC: ${{ github.workspace }}/mingw-src
+      MINGW_DIR: ${{ github.workspace }}/llvm-mingw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git make pkg-config cmake nasm curl file xz-utils
+        shell: bash
+
+      - name: Download llvm-mingw toolchain
+        run: |
+          cd "${{ github.workspace }}"
+          curl -sSL -o llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          tar xf llvm-mingw.tar.xz
+          mv llvm-mingw-* llvm-mingw
+          ls llvm-mingw/bin | grep x86_64-w64-mingw32-gcc
+        shell: bash
+
+      - name: Build FFmpeg and dependencies
+        run: bash scripts/build-mingw.sh
+
+      - name: Verify and package
+        run: |
+          set -e
+          export PATH="${{ github.workspace }}/llvm-mingw/bin:$PATH"
+          mkdir -p "$PREFIX/build-info"
+          file "$PREFIX/bin/ffmpeg.exe" > "$PREFIX/build-info/version.txt" 2>&1 || true
+          x86_64-w64-mingw32-objdump -p "$PREFIX/bin/ffmpeg.exe" | grep "DLL Name" \
+            > "$PREFIX/build-info/dlls.txt" 2>&1 || true
+          ls -lh "$PREFIX/bin"
+          cp "$SRC/ffmpeg/config.log" "$PREFIX/build-info/ffmpeg-config.log" 2>/dev/null || true
+          cd "$PREFIX"
+          tar czf "${{ github.workspace }}/ffmpeg-windows-x86_64-llvm-mingw.tar.gz" bin include 2>/dev/null
+          ls -lh "${{ github.workspace }}"/*.tar.gz
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x86_64-llvm-mingw
+          path: |
+            ${{ github.workspace }}/ffmpeg-windows-x86_64-llvm-mingw.tar.gz
+            ${{ github.workspace }}/mingw-install/build-info
+
+  # ---- Windows x86_64 MSVC via vcpkg ----
+  windows-msvc:
+    name: windows x86_64 msvc
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg (if needed)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe")) {
+            & "$env:VCPKG_INSTALLATION_ROOT\bootstrap-vcpkg.bat"
+          }
+          if (-not $env:PATH.Contains("$env:VCPKG_INSTALLATION_ROOT")) {
+            $env:PATH = "$env:VCPKG_INSTALLATION_ROOT;$env:PATH"
+          }
+          vcpkg version
+
+      - name: Install FFmpeg via vcpkg (MSVC + all codecs)
+        shell: pwsh
+        run: |
+          vcpkg install "ffmpeg[ffmpeg,ffprobe,gpl,x264,x265,vpx,aom,freetype,fontconfig,drawtext,mp3lame,nvcodec,dav1d]:x64-windows"
+
+      - name: Verify and package
+        shell: pwsh
+        run: |
+          $root = "$env:VCPKG_INSTALLATION_ROOT"
+          $bin  = Join-Path $root "installed\x64-windows\tools\ffmpeg\bin"
+          $dll  = Join-Path $root "installed\x64-windows\bin"
+          $pkg  = "${{ github.workspace }}\pkg"
+          if (-not (Test-Path (Join-Path $bin "ffmpeg.exe"))) { throw "ffmpeg.exe not found under $bin" }
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item (Join-Path $bin "ffmpeg.exe")  $pkg -Force
+          Copy-Item (Join-Path $bin "ffprobe.exe") $pkg -Force -ErrorAction SilentlyContinue
+          if (Test-Path $dll)  { Get-ChildItem (Join-Path $dll "*.dll")  | Copy-Item -Destination $pkg -Force }
+          if (Test-Path $bin)  { Get-ChildItem (Join-Path $bin "*.dll")  | Copy-Item -Destination $pkg -Force }
+          gc $pkg\*.dll -ErrorAction SilentlyContinue
+          $env:PATH = "$pkg;$env:PATH"
+          & "$pkg\ffmpeg.exe" -hide_banner -version | Set-Content "$pkg\version.txt"
+          & "$pkg\ffmpeg.exe" -hide_banner -buildconf | Add-Content "$pkg\version.txt"
+          & "$pkg\ffmpeg.exe" -hide_banner -encoders | Set-Content "$pkg\encoders.txt"
+          & "$pkg\ffmpeg.exe" -hide_banner -hwaccels | Set-Content "$pkg\hwaccels.txt"
+          Get-ChildItem $pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x86_64-msvc
+          path: ${{ github.workspace }}/pkg
