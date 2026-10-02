@@ -165,6 +165,22 @@ EOF
   cat "$PREFIX/lib/pkgconfig/aom.pc"
   "$CC" -I"$PREFIX/include" /tmp/aomtest.c -L"$PREFIX/lib" -laom \
     -lws2_32 -luser32 -lbcrypt -lwinpthread -o /tmp/aomtest.exe && echo "aom link: OK"
+  log "Recreating ffmpeg libaom check"
+  {
+    echo "#include <aom/aom_codec.h>"
+    echo "#include <stdint.h>"
+    echo "long check_aom_codec_version(void) { return (long) aom_codec_version; }"
+    echo "int main(void) { int ret = 0; ret |= ((intptr_t)check_aom_codec_version) & 0xFFFF; return ret; }"
+  } > /tmp/aomcheck.c
+  "$CC" -I"$PREFIX/include" /tmp/aomcheck.c -L"$PREFIX/lib" -laom \
+    -lws2_32 -luser32 -lbcrypt -lwinpthread -o /tmp/aomcheck.exe && echo "aom recreate: OK"
+  log "Recreating with pkg-config flags"
+  AOM_CFLAGS="$(pkg-config --cflags aom)"
+  AOM_LIBS="$(pkg-config --libs aom)"
+  echo "cflags: $AOM_CFLAGS"
+  echo "libs: $AOM_LIBS"
+  "$CC" $AOM_CFLAGS /tmp/aomcheck.c $AOM_LIBS \
+    -lws2_32 -luser32 -lbcrypt -lwinpthread -o /tmp/aomcheck2.exe && echo "aom pkg-config recreate: OK"
   ./configure \
     --prefix="$PREFIX" \
     --target-os=win64 --arch=x86_64 \

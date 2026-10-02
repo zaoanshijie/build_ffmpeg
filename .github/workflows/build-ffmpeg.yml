@@ -79,6 +79,7 @@ jobs:
         with:
           name: logs-linux-${{ matrix.arch }}-${{ matrix.compiler }}
           path: |
+            ${{ github.workspace }}/src/ffmpeg/ffbuild/config.log
             ${{ github.workspace }}/src/ffmpeg/config.log
             ${{ github.workspace }}/src/**/config.log
             /tmp/x265-build.log
@@ -142,6 +143,7 @@ jobs:
         with:
           name: logs-windows-x86_64-llvm-mingw
           path: |
+            ${{ github.workspace }}/mingw-src/ffmpeg/ffbuild/config.log
             ${{ github.workspace }}/mingw-src/ffmpeg/config.log
             /tmp/x265-build.log
             /tmp/aom-build.log

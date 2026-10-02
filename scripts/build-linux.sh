@@ -172,7 +172,7 @@ cpu = 'aarch64'
 endian = 'little'
 EOF
     sed -i "s/aarch64-linux-gnu-gcc/$CC/g; s/aarch64-linux-gnu-g++/$CXX/g" "$SRC/dav1d-cross.txt"
-    extra+=(-Dcross_file="$SRC/dav1d-cross.txt")
+    extra=(--cross-file "$SRC/dav1d-cross.txt")
   fi
   rm -rf build
   CC="$CC" CXX="$CXX" meson setup build --buildtype=release --default-library=static \
