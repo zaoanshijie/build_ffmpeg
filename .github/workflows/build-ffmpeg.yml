@@ -152,16 +152,19 @@ jobs:
         shell: pwsh
         run: |
           $root = "$env:VCPKG_INSTALLATION_ROOT"
-          $bin  = Join-Path $root "installed\x64-windows\tools\ffmpeg\bin"
+          $ffmpegExe = Get-ChildItem (Join-Path $root "installed\x64-windows") -Filter ffmpeg.exe -Recurse -ErrorAction SilentlyContinue |
+                       Select-Object -First 1
+          if (-not $ffmpegExe) { throw "ffmpeg.exe not found under $root\installed\x64-windows" }
+          $bin = Split-Path $ffmpegExe.FullName
           $dll  = Join-Path $root "installed\x64-windows\bin"
           $pkg  = "${{ github.workspace }}\pkg"
-          if (-not (Test-Path (Join-Path $bin "ffmpeg.exe"))) { throw "ffmpeg.exe not found under $bin" }
           New-Item -ItemType Directory -Force -Path $pkg | Out-Null
-          Copy-Item (Join-Path $bin "ffmpeg.exe")  $pkg -Force
-          Copy-Item (Join-Path $bin "ffprobe.exe") $pkg -Force -ErrorAction SilentlyContinue
-          if (Test-Path $dll)  { Get-ChildItem (Join-Path $dll "*.dll")  | Copy-Item -Destination $pkg -Force }
-          if (Test-Path $bin)  { Get-ChildItem (Join-Path $bin "*.dll")  | Copy-Item -Destination $pkg -Force }
-          gc $pkg\*.dll -ErrorAction SilentlyContinue
+          Get-ChildItem (Split-Path $bin "ffmpeg.exe") -ErrorAction SilentlyContinue
+          Copy-Item $ffmpegExe.FullName $pkg -Force
+          Get-ChildItem (Join-Path $bin "ffprobe.exe") -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item $_.FullName $pkg -Force }
+          if (Test-Path $dll) { Get-ChildItem (Join-Path $dll "*.dll") | Copy-Item -Destination $pkg -Force }
+          if (Test-Path $bin) { Get-ChildItem (Join-Path $bin "*.dll") | Copy-Item -Destination $pkg -Force -ErrorAction SilentlyContinue }
           $env:PATH = "$pkg;$env:PATH"
           & "$pkg\ffmpeg.exe" -hide_banner -version | Set-Content "$pkg\version.txt"
           & "$pkg\ffmpeg.exe" -hide_banner -buildconf | Add-Content "$pkg\version.txt"

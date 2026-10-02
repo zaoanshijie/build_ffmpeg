@@ -80,21 +80,32 @@ build_x264() {
 build_x265() {
   log "Building x265"
   cd "$SRC"
-  fetch_git x265 https://bitbucket.org/multicoreware/x265_git https://github.com/zhongflyTeam/x265_git
+  if [ ! -d x265/.git ]; then
+    git clone --quiet https://bitbucket.org/multicoreware/x265_git x265 2>/dev/null || \
+    git clone --quiet https://github.com/zhongflyTeam/x265_git x265 2>/dev/null || \
+    fail "clone x265"
+  fi
   cd x265
   mkdir -p build && cd build
   local extra=()
   if [ "$ARCH" = aarch64 ]; then
     extra+=( -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 )
-    extra+=( -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" )
-    extra+=( -DCMAKE_AR="$AR" -DCMAKE_RANLIB="$RANLIB" -DCMAKE_STRIP="$STRIP" )
+    extra+=( -DCMAKE_C_COMPILER="$(command -v "$CC")" -DCMAKE_CXX_COMPILER="$(command -v "$CXX")" )
+    extra+=( -DCMAKE_AR="$(command -v "$AR")" -DCMAKE_RANLIB="$(command -v "$RANLIB")" )
+    extra+=( -DCMAKE_LINKER="$(command -v aarch64-linux-gnu-ld)" )
+    extra+=( -DCMAKE_STRIP="$(command -v "$STRIP")" )
+    extra+=( -DCMAKE_C_COMPILER_AR="$(command -v "$AR")" -DCMAKE_CXX_COMPILER_AR="$(command -v "$AR")" )
+    extra+=( -DCMAKE_C_COMPILER_RANLIB="$(command -v "$RANLIB")" -DCMAKE_CXX_COMPILER_RANLIB="$(command -v "$RANLIB")" )
+    extra+=( -DCMAKE_CROSSCOMPILING=ON )
     extra+=( -DENABLE_ASSEMBLY=OFF )
   else
     extra+=( -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" )
   fi
   cmake ../source -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON "${extra[@]}"
-  make $JOBS && make install
+  make $JOBS VERBOSE=1 2>&1 | tee /tmp/x265-build.log || \
+    { echo "--- x265 link.txt ---"; cat CMakeFiles/x265-static.dir/link.txt 2>/dev/null; exit 1; }
+  make install
 }
 
 build_libvpx() {
@@ -154,7 +165,7 @@ EOF
   fi
   rm -rf build
   CC="$CC" CXX="$CXX" meson setup build --buildtype=release --default-library=static \
-    --prefix="$PREFIX" "${extra[@]}"
+    --prefix="$PREFIX" --libdir=lib "${extra[@]}"
   ninja -C build && ninja -C build install
 }
 

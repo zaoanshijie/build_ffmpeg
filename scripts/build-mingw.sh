@@ -68,12 +68,18 @@ build_x264() {
 build_x265() {
   log "Building x265 (mingw)"
   cd "$SRC"
-  fetch_git x265 https://bitbucket.org/multicoreware/x265_git https://github.com/zhongflyTeam/x265_git
+  if [ ! -d x265/.git ]; then
+    git clone --quiet https://bitbucket.org/multicoreware/x265_git x265 2>/dev/null || \
+    git clone --quiet https://github.com/zhongflyTeam/x265_git x265 2>/dev/null || \
+    fail "clone x265"
+  fi
   cd x265 && mkdir -p build && cd build
   cmake ../source -DCMAKE_TOOLCHAIN_FILE="$PREFIX/mingw-toolchain.cmake" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DENABLE_ASSEMBLY=OFF
-  make $JOBS && make install
+  make $JOBS VERBOSE=1 2>&1 | tee /tmp/x265-build.log || \
+    { echo "--- x265 link.txt ---"; cat CMakeFiles/x265-static.dir/link.txt 2>/dev/null; exit 1; }
+  make install
 }
 
 build_libvpx() {
