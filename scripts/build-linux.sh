@@ -55,6 +55,11 @@ EOF
   esac
   export AR=aarch64-linux-gnu-ar RANLIB=aarch64-linux-gnu-ranlib
   export STRIP=aarch64-linux-gnu-strip NM=aarch64-linux-gnu-nm
+  cat > "$HOME/bin/aarch64-linux-gnu-pkg-config" <<'EOF'
+#!/bin/sh
+exec /usr/bin/pkg-config "$@"
+EOF
+  chmod +x "$HOME/bin/aarch64-linux-gnu-pkg-config"
 else
   case "$COMPILER" in
     gcc)   export CC=gcc;   export CXX=g++ ;;

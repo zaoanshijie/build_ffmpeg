@@ -20,6 +20,12 @@ exec /usr/bin/pkg-config "$@"
 EOF
 chmod +x "$MINGW_DIR/bin/x86_64-w64-mingw32-pkg-config"
 
+# llvm-mingw calls the pthread implementation winpthread; expose the usual
+# -lpthread name for static pkg-config links.
+if [ -f "$MINGW_DIR/x86_64-w64-mingw32/lib/libwinpthread.a" ] && [ ! -e "$PREFIX/lib/libpthread.a" ]; then
+  ln -s "$MINGW_DIR/x86_64-w64-mingw32/lib/libwinpthread.a" "$PREFIX/lib/libpthread.a"
+fi
+
 export CC=x86_64-w64-mingw32-gcc
 export CXX=x86_64-w64-mingw32-g++
 export AR=x86_64-w64-mingw32-ar
@@ -196,6 +202,7 @@ EOF
     --enable-x86asm \
     --enable-gpl --enable-version3 \
     --enable-static --disable-shared \
+    --pkg-config-flags="--static" \
     --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom \
     --enable-libmp3lame --enable-libfreetype \
     --enable-ffnvcodec --enable-cuvid --enable-nvdec --enable-nvenc \
