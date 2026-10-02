@@ -233,7 +233,7 @@ build_ffmpeg() {
   cd ffmpeg
   local extra=()
   if [ "$ARCH" = aarch64 ]; then
-    extra+=( --cross-prefix=aarch64-linux-gnu- )
+    extra+=( --cross-prefix=aarch64-linux-gnu- --target-os=linux )
   else
     extra+=( --enable-vaapi --enable-vdpau )
   fi

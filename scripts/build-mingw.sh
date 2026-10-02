@@ -13,6 +13,13 @@ export PATH="$MINGW_DIR/bin:$PATH"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 export SYSROOT="$MINGW_DIR/x86_64-w64-mingw32"
 
+# FFmpeg configure looks for the cross-prefixed pkg-config on win64 targets.
+cat > "$MINGW_DIR/bin/x86_64-w64-mingw32-pkg-config" <<'EOF'
+#!/bin/sh
+exec /usr/bin/pkg-config "$@"
+EOF
+chmod +x "$MINGW_DIR/bin/x86_64-w64-mingw32-pkg-config"
+
 export CC=x86_64-w64-mingw32-gcc
 export CXX=x86_64-w64-mingw32-g++
 export AR=x86_64-w64-mingw32-ar
