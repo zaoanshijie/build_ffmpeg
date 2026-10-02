@@ -22,6 +22,7 @@ chmod +x "$MINGW_DIR/bin/x86_64-w64-mingw32-pkg-config"
 
 # llvm-mingw calls the pthread implementation winpthread; expose the usual
 # -lpthread name for static pkg-config links.
+mkdir -p "$PREFIX/lib"
 if [ -f "$MINGW_DIR/x86_64-w64-mingw32/lib/libwinpthread.a" ] && [ ! -e "$PREFIX/lib/libpthread.a" ]; then
   ln -s "$MINGW_DIR/x86_64-w64-mingw32/lib/libwinpthread.a" "$PREFIX/lib/libpthread.a"
 fi
