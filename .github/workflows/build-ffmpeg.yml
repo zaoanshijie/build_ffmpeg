@@ -73,6 +73,17 @@ jobs:
             ${{ github.workspace }}/ffmpeg-linux-${{ matrix.arch }}-${{ matrix.compiler }}.tar.gz
             ${{ github.workspace }}/install/build-info
 
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-linux-${{ matrix.arch }}-${{ matrix.compiler }}
+          path: |
+            ${{ github.workspace }}/src/ffmpeg/config.log
+            ${{ github.workspace }}/src/**/config.log
+            /tmp/x265-build.log
+            /tmp/aom-build.log
+
   # ---- Windows x86_64 via llvm-mingw cross from Linux ----
   windows-mingw:
     name: windows x86_64 llvm-mingw
@@ -125,6 +136,16 @@ jobs:
             ${{ github.workspace }}/ffmpeg-windows-x86_64-llvm-mingw.tar.gz
             ${{ github.workspace }}/mingw-install/build-info
 
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-windows-x86_64-llvm-mingw
+          path: |
+            ${{ github.workspace }}/mingw-src/ffmpeg/config.log
+            /tmp/x265-build.log
+            /tmp/aom-build.log
+
   # ---- Windows x86_64 MSVC via vcpkg ----
   windows-msvc:
     name: windows x86_64 msvc
@@ -159,7 +180,6 @@ jobs:
           $dll  = Join-Path $root "installed\x64-windows\bin"
           $pkg  = "${{ github.workspace }}\pkg"
           New-Item -ItemType Directory -Force -Path $pkg | Out-Null
-          Get-ChildItem (Split-Path $bin "ffmpeg.exe") -ErrorAction SilentlyContinue
           Copy-Item $ffmpegExe.FullName $pkg -Force
           Get-ChildItem (Join-Path $bin "ffprobe.exe") -ErrorAction SilentlyContinue |
             ForEach-Object { Copy-Item $_.FullName $pkg -Force }
@@ -176,3 +196,13 @@ jobs:
         with:
           name: ffmpeg-windows-x86_64-msvc
           path: ${{ github.workspace }}/pkg
+
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-windows-x86_64-msvc
+          path: |
+            ${{ env.VCPKG_INSTALLATION_ROOT }}/buildtrees/ffmpeg/*/config.log
+            ${{ env.VCPKG_INSTALLATION_ROOT }}/buildtrees/ffmpeg/*/*.log
+            ${{ github.workspace }}/pkg

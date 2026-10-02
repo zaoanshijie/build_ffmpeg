@@ -103,7 +103,8 @@ build_libaom() {
     -DBUILD_SHARED_LIBS=OFF -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DENABLE_EXAMPLES=0 \
     -DENABLE_TOOLS=0 -DCONFIG_MULTITHREAD=1 -DCONFIG_RUNTIME_CPU_DETECT=0 \
     -DAOM_TARGET_CPU=x86_64
-  make $JOBS && make install
+  make $JOBS VERBOSE=1 2>&1 | tee /tmp/aom-build.log || exit 1
+  make install
 }
 
 build_lame() {
@@ -154,6 +155,16 @@ build_ffmpeg() {
   cd "$SRC"
   fetch_git ffmpeg https://github.com/FFmpeg/FFmpeg.git
   cd ffmpeg
+  # Diagnostic: prove libaom links against the cross toolchain.
+  log "Testing libaom link"
+  cat > /tmp/aomtest.c <<'EOF'
+#include <aom/aom_codec.h>
+int main(void) { aom_codec_version(); return 0; }
+EOF
+  pkg-config --exists 'aom >= 2.0.0' && echo "pkg-config aom: OK" || echo "pkg-config aom: MISSING"
+  cat "$PREFIX/lib/pkgconfig/aom.pc"
+  "$CC" -I"$PREFIX/include" /tmp/aomtest.c -L"$PREFIX/lib" -laom \
+    -lws2_32 -luser32 -lbcrypt -lwinpthread -o /tmp/aomtest.exe && echo "aom link: OK"
   ./configure \
     --prefix="$PREFIX" \
     --target-os=win64 --arch=x86_64 \

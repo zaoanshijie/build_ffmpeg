@@ -62,6 +62,11 @@ else
   esac
   export AR=ar RANLIB=ranlib STRIP=strip NM=nm
 fi
+
+# Native x86_64 also needs system pkg-config files (libva, libvdpau etc).
+if [ "$ARCH" = "x86_64" ]; then
+  export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+fi
 log "Toolchain: arch=$ARCH compiler=$COMPILER CC=$CC"
 
 # ---------------- deps ----------------
@@ -129,8 +134,12 @@ build_libaom() {
   local extra=()
   if [ "$ARCH" = aarch64 ]; then
     extra+=( -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 )
-    extra+=( -DCMAKE_C_COMPILER="$CC" -DCMAKE_ASM_COMPILER="$CC" )
-    extra+=( -DCMAKE_AR="$AR" -DCMAKE_RANLIB="$RANLIB" -DCMAKE_STRIP="$STRIP" )
+    extra+=( -DCMAKE_C_COMPILER="$(command -v "$CC")" -DCMAKE_ASM_COMPILER="$(command -v "$CC")" )
+    extra+=( -DCMAKE_AR="$(command -v "$AR")" -DCMAKE_RANLIB="$(command -v "$RANLIB")" )
+    extra+=( -DCMAKE_LINKER="$(command -v aarch64-linux-gnu-ld)" )
+    extra+=( -DCMAKE_STRIP="$(command -v "$STRIP")" -DCMAKE_NM="$(command -v "$NM")" )
+    extra+=( -DCMAKE_C_COMPILER_AR="$(command -v "$AR")" -DCMAKE_CXX_COMPILER_AR="$(command -v "$AR")" )
+    extra+=( -DCMAKE_C_COMPILER_RANLIB="$(command -v "$RANLIB")" -DCMAKE_CXX_COMPILER_RANLIB="$(command -v "$RANLIB")" )
     extra+=( -DAOM_TARGET_CPU=arm64 -DCONFIG_RUNTIME_CPU_DETECT=0 )
   else
     extra+=( -DCMAKE_C_COMPILER="$CC" -DAOM_TARGET_CPU=x86_64 )
@@ -138,7 +147,9 @@ build_libaom() {
   cmake .. -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DENABLE_EXAMPLES=0 \
     -DENABLE_TOOLS=0 -DCONFIG_MULTITHREAD=1 "${extra[@]}"
-  make $JOBS && make install
+  make $JOBS VERBOSE=1 2>&1 | tee /tmp/aom-build.log || \
+    { echo "--- aom link.txt ---"; cat CMakeFiles/aom_version.dir/link.txt 2>/dev/null; exit 1; }
+  make install
 }
 
 build_dav1d() {
