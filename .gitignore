@@ -4,6 +4,7 @@
 /mingw-src/
 /mingw-install/
 /llvm-mingw/
+/dist/
 *.tar.gz
 *.tar.xz
 /opencode.json
